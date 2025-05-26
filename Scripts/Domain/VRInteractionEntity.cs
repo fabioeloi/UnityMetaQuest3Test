@@ -14,6 +14,8 @@ namespace MetaQuestTest.Domain
         public InteractionType Type { get; private set; }
         public bool IsGrabbable { get; private set; }
         public bool IsUsable { get; private set; }
+        public bool WasInteracted { get; private set; } = false; // New property
+        public int InteractionCount { get; private set; } = 0; // New property
         
         // Value object for position in 3D space
         public class Position
@@ -65,6 +67,9 @@ namespace MetaQuestTest.Domain
         public void Interact()
         {
             // Domain logic for basic interaction
+            WasInteracted = true;
+            InteractionCount++;
+            Debug.Log($"Entity '{Name}' interacted with. Total interactions: {InteractionCount}. Grabbable: {IsGrabbable}, Usable: {IsUsable}");
         }
         
         public bool CanBeGrabbed()

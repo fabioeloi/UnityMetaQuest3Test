@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit; // Required for XR components
 using MetaQuestTest.Domain;
+using VRApplication.Infrastructure; // Added for EntityIdentifier
 
 namespace MetaQuestTest.Infrastructure
 {
@@ -12,7 +14,7 @@ namespace MetaQuestTest.Infrastructure
     public class UnityVRInteractionRepository : MonoBehaviour, IVRInteractionRepository
     {
         private Dictionary<string, VRInteractionEntity> _interactionEntities = new Dictionary<string, VRInteractionEntity>();
-        private Dictionary<string, GameObject> _gameObjectMap = new Dictionary<string, GameObject>();
+        public Dictionary<string, GameObject> _gameObjectMap = new Dictionary<string, GameObject>(); // Made public for VRInteractionController
         
         public void Add(VRInteractionEntity entity)
         {
@@ -24,13 +26,28 @@ namespace MetaQuestTest.Infrastructure
                 GameObject gameObject = new GameObject(entity.Name);
                 gameObject.transform.position = entity.CurrentPosition.ToVector3();
                 
-                // Add appropriate Unity components based on entity properties
-                if (entity.CanBeGrabbed())
+                // Add EntityIdentifier component
+                var entityIdentifier = gameObject.AddComponent<EntityIdentifier>();
+                entityIdentifier.EntityId = entity.Id;
+                
+                // Always add a collider
+                gameObject.AddComponent<BoxCollider>();
+                
+                // Add appropriate XR components based on entity properties
+                if (entity.IsGrabbable) // Using direct property access
                 {
-                    // In a real implementation, we would add XR grab interactable components
-                    // For this simple test project, we'll just add a placeholder component
-                    gameObject.AddComponent<BoxCollider>();
-                    gameObject.AddComponent<Rigidbody>();
+                    gameObject.AddComponent<XRGrabInteractable>();
+                    var rb = gameObject.GetComponent<Rigidbody>();
+                    if (rb == null)
+                    {
+                        rb = gameObject.AddComponent<Rigidbody>();
+                    }
+                    rb.useGravity = false;
+                    rb.isKinematic = true; 
+                }
+                else if (entity.IsUsable) // Using direct property access
+                {
+                    gameObject.AddComponent<XRSimpleInteractable>();
                 }
                 
                 _gameObjectMap[entity.Id] = gameObject;
@@ -70,6 +87,12 @@ namespace MetaQuestTest.Infrastructure
                 // Destroy the corresponding Unity GameObject
                 if (_gameObjectMap.TryGetValue(id, out var gameObject))
                 {
+                    // Remove EntityIdentifier if it exists (though Destroy will handle it)
+                    var entityIdentifier = gameObject.GetComponent<EntityIdentifier>();
+                    if (entityIdentifier != null)
+                    {
+                        Destroy(entityIdentifier);
+                    }
                     Destroy(gameObject);
                     _gameObjectMap.Remove(id);
                 }
@@ -79,6 +102,19 @@ namespace MetaQuestTest.Infrastructure
         public IEnumerable<VRInteractionEntity> GetAll()
         {
             return _interactionEntities.Values;
+        }
+
+        public string GetEntityIdByGameObject(GameObject go)
+        {
+            if (go != null)
+            {
+                var entityIdentifier = go.GetComponent<EntityIdentifier>();
+                if (entityIdentifier != null)
+                {
+                    return entityIdentifier.EntityId;
+                }
+            }
+            return null;
         }
         
         // Unity lifecycle methods

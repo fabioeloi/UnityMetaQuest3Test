@@ -3,6 +3,7 @@ using UnityEngine.XR.Interaction.Toolkit;
 using MetaQuestTest.Application;
 using MetaQuestTest.Domain;
 using MetaQuestTest.Infrastructure;
+using System.Linq; // Added for LINQ operations
 
 namespace MetaQuestTest.Presentation
 {
@@ -14,9 +15,12 @@ namespace MetaQuestTest.Presentation
     {
         private IVRInteractionService _interactionService;
         private UnityVRInteractionRepository _repository;
+        private XRInteractionManager _interactionManager;
 
+        // It's better to use XROrigin or a similar class that contains the XRRig and XRInteractionManager
+        // For simplicity, assuming _xrRig might be the XROrigin or has the manager as a component.
         [SerializeField]
-        private XRRig _xrRig;
+        private XRBaseControllerInteractor _xrRig; // Changed to XRBaseControllerInteractor for interactor name
         
         // Sample interactable objects to create on start
         [SerializeField]
@@ -29,8 +33,25 @@ namespace MetaQuestTest.Presentation
         void Awake()
         {
             // Setup the repository and service
-            _repository = gameObject.AddComponent<UnityVRInteractionRepository>();
+            _repository = FindObjectOfType<UnityVRInteractionRepository>();
+            if (_repository == null)
+            {
+                _repository = gameObject.AddComponent<UnityVRInteractionRepository>();
+            }
             _interactionService = new VRInteractionService(_repository);
+
+            // Get the XRInteractionManager
+            _interactionManager = FindObjectOfType<XRInteractionManager>();
+            if (_interactionManager == null)
+            {
+                // Fallback if not found on XRRig, try to find it in the scene
+                _interactionManager = FindObjectOfType<XRInteractionManager>();
+                if (_interactionManager == null)
+                {
+                    Debug.LogError("XRInteractionManager not found in the scene.");
+                    return;
+                }
+            }
         }
         
         void Start()
@@ -46,17 +67,14 @@ namespace MetaQuestTest.Presentation
         {
             for (int i = 0; i < _numberOfSampleObjects; i++)
             {
-                // Create different types of interactable objects
-                InteractionType type = (InteractionType)(i % 4); // Cycle through the enum values
+                InteractionType type = (InteractionType)(i % System.Enum.GetValues(typeof(InteractionType)).Length);
                 bool isGrabbable = (i % 2 == 0);
                 bool isUsable = (i % 3 == 0);
                 
-                // Position objects in a circle around the player
                 float angle = i * (360f / _numberOfSampleObjects);
                 float x = Mathf.Sin(angle * Mathf.Deg2Rad) * _distributionRadius;
                 float z = Mathf.Cos(angle * Mathf.Deg2Rad) * _distributionRadius;
                 
-                // Create the domain entity
                 var entity = _interactionService.RegisterInteractable(
                     $"Interactable_{type}_{i}", 
                     type, 
@@ -64,29 +82,94 @@ namespace MetaQuestTest.Presentation
                     isUsable
                 );
                 
-                // Update its position
                 var position = new VRInteractionEntity.Position(x, 1.0f, z);
                 _interactionService.UpdateInteractablePosition(entity.Id, position);
+
+                // Component addition logic is now handled by UnityVRInteractionRepository.Add()
+                // No need to add XRGrabInteractable or BoxCollider here.
             }
         }
         
         private void SetupXRInteractionEvents()
         {
-            // In a real implementation, we would hook into XR Interaction events here
-            // For example:
-            // var interactionManager = _xrRig.GetComponent<XRInteractionManager>();
-            // interactionManager.interactionGroups.GetRegisteredInteractionGroups()...
-            
-            // For this simple test project, we'll just log that we're ready
-            Debug.Log("VR Interaction Controller initialized and ready");
+            if (_interactionManager == null)
+            {
+                Debug.LogError("XRInteractionManager is not set. Cannot setup XR events.");
+                return;
+            }
+
+            if (_repository == null || _repository._gameObjectMap == null)
+            {
+                 Debug.LogError("Repository or GameObjectMap is not initialized.");
+                 return;
+            }
+
+            // Iterate through GameObjects managed by the repository
+            foreach (var go in _repository._gameObjectMap.Values.ToList()) // ToList() to avoid modification issues if any
+            {
+                if (go == null) continue;
+
+                var interactable = go.GetComponent<XRBaseInteractable>();
+                if (interactable != null)
+                {
+                    interactable.selectEntered.AddListener(HandleSelectEntered);
+                    interactable.activated.AddListener(HandleActivated);
+                }
+            }
+            Debug.Log("VR Interaction Controller initialized and XR events setup.");
+        }
+
+        private void HandleSelectEntered(SelectEnterEventArgs args)
+        {
+            var interactableObject = args.interactableObject as IXRSelectInteractable;
+            if (interactableObject != null && interactableObject.transform != null)
+            {
+                string entityId = _repository.GetEntityIdByGameObject(interactableObject.transform.gameObject);
+                if (!string.IsNullOrEmpty(entityId))
+                {
+                    string interactorName = args.interactorObject.transform.name; // Get interactor name
+                    _interactionService.ProcessInteraction(entityId, interactorName, InteractionEvent.Selected);
+                    Debug.Log($"Select Entered: Entity {entityId} by {interactorName}");
+                }
+            }
+        }
+
+        private void HandleActivated(ActivateEventArgs args)
+        {
+            var interactableObject = args.interactableObject as IXRActivateInteractable;
+            if (interactableObject != null && interactableObject.transform != null)
+            {
+                string entityId = _repository.GetEntityIdByGameObject(interactableObject.transform.gameObject);
+                if (!string.IsNullOrEmpty(entityId))
+                {
+                    string interactorName = args.interactorObject.transform.name; // Get interactor name
+                    _interactionService.ProcessInteraction(entityId, interactorName, InteractionEvent.Activated);
+                    Debug.Log($"Activated: Entity {entityId} by {interactorName}");
+                }
+            }
         }
         
-        // Update is called once per frame
         void Update()
         {
-            // Any per-frame updates would go here
-            // This could include checking for controller inputs, 
-            // updating positions of tracked objects, etc.
+            // Per-frame updates can go here
+        }
+
+        void OnDestroy()
+        {
+            // Unsubscribe from events to prevent memory leaks
+            if (_repository != null && _repository._gameObjectMap != null)
+            {
+                foreach (var go in _repository._gameObjectMap.Values.ToList())
+                {
+                    if (go == null) continue;
+                    var interactable = go.GetComponent<XRBaseInteractable>();
+                    if (interactable != null)
+                    {
+                        interactable.selectEntered.RemoveListener(HandleSelectEntered);
+                        interactable.activated.RemoveListener(HandleActivated);
+                    }
+                }
+            }
         }
     }
 }

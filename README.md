@@ -29,6 +29,21 @@ The project follows a layered architecture based on DDD principles:
   - Unity MonoBehaviour components
   - Scene setup and XR integration
 
+### Interaction Flow
+
+The project handles user interactions with VR objects through a defined flow:
+
+1.  **XR Event Trigger**: Unity's XR Interaction Toolkit detects user actions (e.g., grab, use) on GameObjects.
+2.  **Event Handling**: `VRInteractionController` (Presentation Layer) listens to these XR events.
+3.  **Entity Mapping**:
+    *   The `VRInteractionController` uses the `UnityVRInteractionRepository` (Infrastructure Layer) to find the domain entity associated with the interacted GameObject.
+    *   This mapping is facilitated by the `EntityIdentifier` component (Infrastructure Layer) attached to GameObjects, which holds the domain entity's ID.
+4.  **Service Call**: `VRInteractionController` calls `IVRInteractionService.ProcessInteraction()`, passing the entity ID and interaction type.
+5.  **Domain Logic Execution**: The `VRInteractionService` (Application Layer) retrieves the `VRInteractionEntity` and invokes its `Interact()` method.
+6.  **Entity Reaction**: The `VRInteractionEntity.Interact()` method (Domain Layer) contains the specific business logic for how the entity responds to the interaction (e.g., changing state, logging).
+
+This flow ensures that Unity-specific XR events are translated into domain-specific actions, keeping the core logic independent of the XR implementation details.
+
 ## Development Setup
 
 ### Prerequisites
@@ -63,8 +78,9 @@ The project uses Unity's test framework for unit testing. To run the tests:
 
 1. Open the project in Unity
 2. Open Test Runner window (Window > General > Test Runner)
-3. Select "Edit Mode" tab
-4. Click "Run All" to execute tests
+3. Select "Edit Mode" tab to run domain and application layer unit tests.
+4. Select "Play Mode" tab to run tests that involve MonoBehaviour behaviors and interactions within a simulated Unity environment (like the XR interaction flow tests).
+5. Click "Run All" in the respective tab to execute tests.
 
 ## CI/CD Pipeline
 
