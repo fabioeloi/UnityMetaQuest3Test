@@ -71,6 +71,37 @@ namespace MetaQuestTest.Domain
             InteractionCount++;
             Debug.Log($"Entity '{Name}' interacted with. Total interactions: {InteractionCount}. Grabbable: {IsGrabbable}, Usable: {IsUsable}");
         }
+
+        [System.Obsolete("Use Grab() or Use() instead.")]
+        public void Interact()
+        {
+            // Domain logic for basic interaction
+            WasInteracted = true;
+            InteractionCount++;
+            Debug.Log($"Entity '{Name}' interacted with (old method). Total interactions: {InteractionCount}. Grabbable: {IsGrabbable}, Usable: {IsUsable}");
+        }
+
+        /// <summary>
+        /// Handles the domain logic for a grab interaction.
+        /// </summary>
+        /// <param name="interactorId">Identifier for the interactor that performed the grab.</param>
+        public void Grab(string interactorId)
+        {
+            WasInteracted = true;
+            InteractionCount++;
+            Debug.Log($"Entity '{Name}' GRABBED by interactor '{interactorId}'. Total interactions: {InteractionCount}.");
+        }
+
+        /// <summary>
+        /// Handles the domain logic for a use interaction.
+        /// </summary>
+        /// <param name="interactorId">Identifier for the interactor that performed the use action.</param>
+        public void Use(string interactorId)
+        {
+            WasInteracted = true;
+            InteractionCount++;
+            Debug.Log($"Entity '{Name}' USED by interactor '{interactorId}'. Total interactions: {InteractionCount}.");
+        }
         
         public bool CanBeGrabbed()
         {

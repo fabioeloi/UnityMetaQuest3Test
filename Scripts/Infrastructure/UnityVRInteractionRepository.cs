@@ -29,10 +29,10 @@ namespace MetaQuestTest.Infrastructure
                 // Add EntityIdentifier component
                 var entityIdentifier = gameObject.AddComponent<EntityIdentifier>();
                 entityIdentifier.EntityId = entity.Id;
-                
+
                 // Always add a collider
                 gameObject.AddComponent<BoxCollider>();
-                
+
                 // Add appropriate XR components based on entity properties
                 if (entity.IsGrabbable) // Using direct property access
                 {
@@ -43,7 +43,7 @@ namespace MetaQuestTest.Infrastructure
                         rb = gameObject.AddComponent<Rigidbody>();
                     }
                     rb.useGravity = false;
-                    rb.isKinematic = true; 
+                    rb.isKinematic = true;
                 }
                 else if (entity.IsUsable) // Using direct property access
                 {

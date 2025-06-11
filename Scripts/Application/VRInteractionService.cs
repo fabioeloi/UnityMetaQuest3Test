@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using MetaQuestTest.Domain;
+using UnityEngine; // Required for Debug.LogWarning
 
 namespace MetaQuestTest.Application
 {
@@ -44,13 +45,64 @@ namespace MetaQuestTest.Application
             }
         }
 
+        [System.Obsolete("Use ProcessGrabInteraction() or ProcessUseInteraction() instead.")]
         public void ProcessInteraction(string interactableId, string interactorId)
+        {
+            Debug.LogWarning($"ProcessInteraction (obsolete) called for entity {interactableId} by {interactorId}. Consider updating to specific interaction methods.");
+            var entity = _repository.GetById(interactableId);
+            if (entity != null)
+            {
+                // Calling the obsolete Interact() method on the entity as per old behavior
+                #pragma warning disable CS0618 // Type or member is obsolete
+                entity.Interact();
+                #pragma warning restore CS0618 // Type or member is obsolete
+                _repository.Update(entity);
+            }
+            else
+            {
+                Debug.LogWarning($"Entity with ID {interactableId} not found. Obsolete ProcessInteraction call failed.");
+            }
+        }
+
+        public void ProcessGrabInteraction(string interactableId, string interactorId)
         {
             var entity = _repository.GetById(interactableId);
             if (entity != null)
             {
-                entity.Interact();
-                _repository.Update(entity);
+                if (entity.IsGrabbable)
+                {
+                    entity.Grab(interactorId);
+                    _repository.Update(entity); // Persist changes
+                }
+                else
+                {
+                    Debug.LogWarning($"Entity with ID {interactableId} is not grabbable. Grab interaction aborted.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Entity with ID {interactableId} not found. Cannot process grab interaction.");
+            }
+        }
+
+        public void ProcessUseInteraction(string interactableId, string interactorId)
+        {
+            var entity = _repository.GetById(interactableId);
+            if (entity != null)
+            {
+                if (entity.IsUsable)
+                {
+                    entity.Use(interactorId);
+                    _repository.Update(entity); // Persist changes
+                }
+                else
+                {
+                    Debug.LogWarning($"Entity with ID {interactableId} is not usable. Use interaction aborted.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Entity with ID {interactableId} not found. Cannot process use interaction.");
             }
         }
     }

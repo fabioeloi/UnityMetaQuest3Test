@@ -128,8 +128,9 @@ namespace MetaQuestTest.Presentation
                 if (!string.IsNullOrEmpty(entityId))
                 {
                     string interactorName = args.interactorObject.transform.name; // Get interactor name
-                    _interactionService.ProcessInteraction(entityId, interactorName, InteractionEvent.Selected);
-                    Debug.Log($"Select Entered: Entity {entityId} by {interactorName}");
+                    // Call the new specific grab interaction method
+                    _interactionService.ProcessGrabInteraction(entityId, interactorName);
+                    Debug.Log($"Select Entered (Grab): Entity {entityId} by {interactorName}");
                 }
             }
         }
@@ -143,8 +144,9 @@ namespace MetaQuestTest.Presentation
                 if (!string.IsNullOrEmpty(entityId))
                 {
                     string interactorName = args.interactorObject.transform.name; // Get interactor name
-                    _interactionService.ProcessInteraction(entityId, interactorName, InteractionEvent.Activated);
-                    Debug.Log($"Activated: Entity {entityId} by {interactorName}");
+                    // Call the new specific use interaction method
+                    _interactionService.ProcessUseInteraction(entityId, interactorName);
+                    Debug.Log($"Activated (Use): Entity {entityId} by {interactorName}");
                 }
             }
         }

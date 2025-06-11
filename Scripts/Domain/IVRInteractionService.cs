@@ -31,6 +31,21 @@ namespace MetaQuestTest.Domain
         /// <summary>
         /// Processes an interaction with an entity
         /// </summary>
+        [System.Obsolete("Use ProcessGrabInteraction() or ProcessUseInteraction() instead.")]
         void ProcessInteraction(string interactableId, string interactorId);
+
+        /// <summary>
+        /// Processes a grab interaction with a specific entity.
+        /// </summary>
+        /// <param name="interactableId">The ID of the interactable entity being grabbed.</param>
+        /// <param name="interactorId">The ID of the interactor performing the grab.</param>
+        void ProcessGrabInteraction(string interactableId, string interactorId);
+
+        /// <summary>
+        /// Processes a use interaction with a specific entity.
+        /// </summary>
+        /// <param name="interactableId">The ID of the interactable entity being used.</param>
+        /// <param name="interactorId">The ID of the interactor performing the use action.</param>
+        void ProcessUseInteraction(string interactableId, string interactorId);
     }
 }

@@ -50,7 +50,7 @@ public class InteractionFlowTests
         // 5. VRInteractionController
         var vrControllerGo = new GameObject("VRInteractionController");
         _vrController = vrControllerGo.AddComponent<VRInteractionController>();
-        
+
         // Yield a frame to ensure Awake and Start methods of VRInteractionController (and its components) are called.
         yield return null;
 
@@ -80,7 +80,7 @@ public class InteractionFlowTests
         GameObject.Destroy(_dummyInteractor.gameObject.GetComponent<XRController>().gameObject); // Destroy interactor
         GameObject.Destroy(_interactionManager.gameObject);
         GameObject.Destroy(_vrController.gameObject); // This should also destroy repository if it's a component
-        
+
         // Destroy XROrigin and EventSystem if they were created by setup
         var xrOrigin = GameObject.Find("XROrigin");
         if (xrOrigin != null) GameObject.Destroy(xrOrigin);
@@ -103,7 +103,7 @@ public class InteractionFlowTests
         var entity = _interactionService.RegisterInteractable(entityName, InteractionType.Grab, true, false);
         Assert.IsNotNull(entity, "Entity should be registered.");
         // Set position after registration, repository's Add method uses CurrentPosition
-        _interactionService.UpdateInteractablePosition(entity.Id, new VRInteractionEntity.Position(0,1,2)); 
+        _interactionService.UpdateInteractablePosition(entity.Id, new VRInteractionEntity.Position(0,1,2));
         yield return null; // Allow repository to process Add and create/update GameObject
 
         GameObject entityGo = _interactionRepository._gameObjectMap[entity.Id];
@@ -113,13 +113,14 @@ public class InteractionFlowTests
         Assert.IsNotNull(grabInteractable, "XRGrabInteractable component should be on the GameObject.");
 
         // Act
-        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' interacted with. Total interactions: 1. Grabbable: True, Usable: False");
+        // Updated log message to match VRInteractionEntity.Grab()
+        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' GRABBED by interactor '{_dummyInteractor.name}'. Total interactions: 1.");
 
         Assert.IsTrue(_dummyInteractor.gameObject.activeInHierarchy && _dummyInteractor.enabled, "Interactor should be active and enabled.");
         Assert.IsTrue(grabInteractable.gameObject.activeInHierarchy && grabInteractable.enabled, "Interactable should be active and enabled.");
-        
+
         _interactionManager.SelectEnter(_dummyInteractor, grabInteractable);
-        
+
         yield return null; // Wait a frame for event processing by VRInteractionController
 
         // Assert
@@ -127,7 +128,7 @@ public class InteractionFlowTests
         Assert.IsNotNull(updatedEntity, "Updated entity should be retrievable.");
         Assert.IsTrue(updatedEntity.WasInteracted, "Entity's WasInteracted should be true after grab.");
         Assert.AreEqual(1, updatedEntity.InteractionCount, "Entity's InteractionCount should be 1 after grab.");
-        
+
         // LogAssert.NoUnexpectedReceived() in TearDown will verify the expected log.
         yield return null;
     }
@@ -151,18 +152,18 @@ public class InteractionFlowTests
         Assert.IsNotNull(simpleInteractable, "XRSimpleInteractable component should be on the GameObject for a usable entity.");
 
         // Act
-        // The log message reflects IsGrabbable=false, IsUsable=true
-        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' interacted with. Total interactions: 1. Grabbable: False, Usable: True");
+        // Updated log message to match VRInteractionEntity.Use()
+        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' USED by interactor '{_dummyInteractor.name}'. Total interactions: 1.");
 
         Assert.IsTrue(_dummyInteractor.gameObject.activeInHierarchy && _dummyInteractor.enabled, "Interactor should be active and enabled.");
         Assert.IsTrue(simpleInteractable.gameObject.activeInHierarchy && simpleInteractable.enabled, "Interactable should be active and enabled.");
-        
+
         // Simulate the activate event for XRSimpleInteractable
         // Note: XRDirectInteractor might not directly "activate" an XRSimpleInteractable in the same way it "selects" a grabbable.
         // Activation is often triggered by a controller button press while hovering or selecting.
         // We need to ensure the VRInteractionController's HandleActivated is connected to simpleInteractable.activated event.
         // The VRInteractionController.SetupXRInteractionEvents should handle this.
-        
+
         // Direct simulation of activate:
         // The interactor needs to be selecting the interactable first for activate to typically work.
         // For XRSimpleInteractable, it might respond to hover and activate.
@@ -172,7 +173,7 @@ public class InteractionFlowTests
 
         // Now activate
         _interactionManager.Activate(_dummyInteractor, simpleInteractable);
-        
+
         yield return null; // Wait a frame for event processing by VRInteractionController
 
         // Assert
@@ -180,7 +181,7 @@ public class InteractionFlowTests
         Assert.IsNotNull(updatedEntity, "Updated entity should be retrievable.");
         Assert.IsTrue(updatedEntity.WasInteracted, "Entity's WasInteracted should be true after use.");
         Assert.AreEqual(1, updatedEntity.InteractionCount, "Entity's InteractionCount should be 1 after use.");
-        
+
         // Clean up selection for this test item
         _interactionManager.SelectExit(_dummyInteractor, simpleInteractable);
         yield return null;

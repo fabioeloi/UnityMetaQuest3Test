@@ -38,11 +38,15 @@ The project handles user interactions with VR objects through a defined flow:
 3.  **Entity Mapping**:
     *   The `VRInteractionController` uses the `UnityVRInteractionRepository` (Infrastructure Layer) to find the domain entity associated with the interacted GameObject.
     *   This mapping is facilitated by the `EntityIdentifier` component (Infrastructure Layer) attached to GameObjects, which holds the domain entity's ID.
-4.  **Service Call**: `VRInteractionController` calls `IVRInteractionService.ProcessInteraction()`, passing the entity ID and interaction type.
-5.  **Domain Logic Execution**: The `VRInteractionService` (Application Layer) retrieves the `VRInteractionEntity` and invokes its `Interact()` method.
-6.  **Entity Reaction**: The `VRInteractionEntity.Interact()` method (Domain Layer) contains the specific business logic for how the entity responds to the interaction (e.g., changing state, logging).
+4.  **Service Call**:
+    *   `VRInteractionController` distinguishes between different XR events. For example, a `selectEntered` event (typically a grab) will cause it to call `IVRInteractionService.ProcessGrabInteraction(entityId, interactorName)`.
+    *   An `activated` event (typically a use action, like a button press) will cause it to call `IVRInteractionService.ProcessUseInteraction(entityId, interactorName)`.
+5.  **Domain Logic Execution**:
+    *   The `IVRInteractionService` (Application Layer) retrieves the `VRInteractionEntity`.
+    *   Based on the specific service method called (e.g., `ProcessGrabInteraction`), it then invokes the corresponding method on the entity (e.g., `VRInteractionEntity.Grab(interactorName)`).
+6.  **Entity Reaction**: The specific methods (`Grab()` or `Use()`) within `VRInteractionEntity` (Domain Layer) contain the business logic for how the entity responds to that particular type of interaction (e.g., changing state, logging specific messages).
 
-This flow ensures that Unity-specific XR events are translated into domain-specific actions, keeping the core logic independent of the XR implementation details.
+This flow ensures that Unity-specific XR events are translated into distinct, domain-specific actions (`Grab`, `Use`), enhancing clarity and separation of concerns.
 
 ## Development Setup
 
