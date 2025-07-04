@@ -47,5 +47,26 @@ namespace MetaQuestTest.Domain
         /// <param name="interactableId">The ID of the interactable entity being used.</param>
         /// <param name="interactorId">The ID of the interactor performing the use action.</param>
         void ProcessUseInteraction(string interactableId, string interactorId);
+
+        /// <summary>
+        /// Processes a release interaction with a specific entity.
+        /// </summary>
+        /// <param name="interactableId">The ID of the interactable entity being released.</param>
+        /// <param name="interactorId">The ID of the interactor performing the release.</param>
+        void ProcessReleaseInteraction(string interactableId, string interactorId);
+
+        /// <summary>
+        /// Processes a hover enter event for a specific entity.
+        /// </summary>
+        /// <param name="interactableId">The ID of the interactable entity being hovered over.</param>
+        /// <param name="interactorId">The ID of the interactor performing the hover.</param>
+        void ProcessHoverEnter(string interactableId, string interactorId);
+
+        /// <summary>
+        /// Processes a hover exit event for a specific entity.
+        /// </summary>
+        /// <param name="interactableId">The ID of the interactable entity that was being hovered over.</param>
+        /// <param name="interactorId">The ID of the interactor that stopped hovering.</param>
+        void ProcessHoverExit(string interactableId, string interactorId);
     }
 }

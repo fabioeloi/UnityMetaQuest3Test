@@ -13,15 +13,22 @@ DDD is a software design approach that focuses on modeling the software to match
 The core of our application containing the business logic with no dependencies on other layers.
 
 **Components:**
-- `VRInteractionEntity`: Core domain entity representing an interactable object in VR. It now includes specific interaction methods:
-    - `Grab(string interactorId)`: Handles the logic when the entity is grabbed.
-    - `Use(string interactorId)`: Handles the logic when the entity is used (e.g., a button is pressed).
-    - The generic `Interact()` method is now marked as `[System.Obsolete("Use Grab() or Use() instead.")]` to guide developers towards the more explicit interaction methods.
-- `IVRInteractionRepository`: Repository interface for persistence operations of `VRInteractionEntity` instances.
-- `IVRInteractionService`: Domain service interface defining high-level operations for VR interactions.
+- `VRInteractionEntity`: Core domain entity representing an interactable object in VR. It now includes:
+    - Properties:
+        - `IsGrabbed`: Boolean state indicating if the entity is currently grabbed.
+        - `IsHovered`: Boolean state indicating if the entity is currently being hovered over.
+    - Specific interaction methods:
+        - `Grab(string interactorId)`: Sets `IsGrabbed = true`, updates interaction counters, and logs.
+        - `Release(string interactorId)`: Sets `IsGrabbed = false` and logs.
+        - `Use(string interactorId)`: Handles "use" logic, updates interaction counters, and logs.
+        - `HoverEnter(string interactorId)`: Sets `IsHovered = true` and logs.
+        - `HoverExit(string interactorId)`: Sets `IsHovered = false` and logs.
+    - The generic `Interact()` method is marked `[System.Obsolete]`.
+- `IVRInteractionRepository`: Repository interface for persistence of `VRInteractionEntity` instances.
+- `IVRInteractionService`: Domain service interface defining high-level operations.
 
 **Key Characteristics:**
-- Contains business rules and logic, encapsulated within entities like `VRInteractionEntity`.
+- Contains business rules and logic, primarily within `VRInteractionEntity` (e.g., state changes like `IsGrabbed`, `IsHovered`).
 - Uses value objects (e.g., `Position`)
 - Has no dependencies on external frameworks or libraries
 - Implements domain events for state changes
@@ -31,17 +38,20 @@ The core of our application containing the business logic with no dependencies o
 Coordinates the domain objects to perform specific application tasks.
 
 **Components:**
-- `VRInteractionService`: Implementation of `IVRInteractionService`. This service now includes:
-    - `ProcessGrabInteraction(string interactableId, string interactorId)`: Coordinates the process of a grab interaction, retrieving the entity and calling its `Grab()` method.
-    - `ProcessUseInteraction(string interactableId, string interactorId)`: Coordinates the process of a use interaction, retrieving the entity and calling its `Use()` method.
-    - The generic `ProcessInteraction(string interactableId, string interactorId)` method is marked as `[System.Obsolete("Use ProcessGrabInteraction() or ProcessUseInteraction() instead.")]`.
+- `VRInteractionService`: Implementation of `IVRInteractionService`. This service now includes methods for each specific interaction type:
+    - `ProcessGrabInteraction(interactableId, interactorId)`: Retrieves entity, calls `entity.Grab()`, updates repository.
+    - `ProcessReleaseInteraction(interactableId, interactorId)`: Retrieves entity, calls `entity.Release()`, updates repository.
+    - `ProcessUseInteraction(interactableId, interactorId)`: Retrieves entity, calls `entity.Use()`, updates repository.
+    - `ProcessHoverEnter(interactableId, interactorId)`: Retrieves entity, calls `entity.HoverEnter()`, updates repository.
+    - `ProcessHoverExit(interactableId, interactorId)`: Retrieves entity, calls `entity.HoverExit()`, updates repository.
+    - The generic `ProcessInteraction()` method is marked `[System.Obsolete]`.
 - Use cases for VR interactions are orchestrated by this service.
 
 **Key Characteristics:**
-- Depends on the domain layer (specifically `IVRInteractionRepository` and `VRInteractionEntity`).
-- Orchestrates domain objects to perform tasks based on specific interaction types.
-- Doesn't contain business rules itself but delegates to domain entities.
-- Translates between the presentation layer's requests and domain layer actions.
+- Depends on the domain layer (`IVRInteractionRepository`, `VRInteractionEntity`).
+- Orchestrates domain objects for specific interaction types.
+- Delegates business rule execution to domain entities.
+- Triggers repository updates, which in turn can lead to visual feedback (e.g., for hover).
 
 ### Infrastructure Layer
 
@@ -51,32 +61,37 @@ Provides implementations for interfaces defined in the domain layer.
 - `UnityVRInteractionRepository`: Unity-specific implementation of `IVRInteractionRepository`. It manages the lifecycle of GameObjects corresponding to `VRInteractionEntity` instances. This includes:
     - Creating GameObjects.
     - Attaching the `EntityIdentifier` component to link the GameObject to its domain entity ID.
-    - Dynamically adding necessary XR components (e.g., `XRGrabInteractable`, `XRSimpleInteractable`, `Rigidbody`, `Collider`) to the GameObject based on the properties of the `VRInteractionEntity` (e.g., `IsGrabbable`, `IsUsable`).
-- `EntityIdentifier`: A MonoBehaviour component that holds the ID of the domain `VRInteractionEntity` it represents. This allows the system to retrieve the domain entity associated with a given Unity GameObject.
+    - Dynamically adding necessary XR components based on `VRInteractionEntity` properties.
+    - **Hover Visual Feedback**: When its `Update(VRInteractionEntity entity)` method is called (typically by `VRInteractionService` after an entity state change), it checks the `entity.IsHovered` state. If `IsHovered` is true, it changes the material color of the corresponding GameObject to `hoverColor`; otherwise, it reverts to `originalColor`. This provides immediate visual feedback for hover interactions. It has public `originalColor` and `hoverColor` fields for configuration.
+    - In its `Add()` method, it also ensures new GameObjects are given a `MeshRenderer`, a primitive mesh (cube), and an initial material set to `originalColor` so they are visible and ready for color changes.
+- `EntityIdentifier`: A MonoBehaviour component that links a GameObject to its domain entity ID.
 - Setup scripts for development environment and deployment.
 
 **Key Characteristics:**
-- Implements persistence, framework integration, etc.
-- Contains Unity-specific code and integration for XR components and GameObject management.
+- Implements persistence and framework integration.
+- Contains Unity-specific code for GameObject creation, XR component setup, and visual feedback mechanisms like color changes.
 - Depends on the domain and application layers.
-- Handles technical concerns like bridging Unity's GameObject world with the domain model.
+- Bridges Unity's visual/physical world with the domain model.
 
 ### Presentation Layer
 
 Handles the user interface and interactions with the system.
 
 **Components:**
-- `VRInteractionController`: Connects Unity's XR Interaction Toolkit events with the application's domain logic.
-    - It subscribes to `selectEntered` events (typically from `XRGrabInteractable`) and routes these to the `ProcessGrabInteraction` method of the `IVRInteractionService`.
-    - It subscribes to `activated` events (from `XRBaseInteractable`, which includes `XRGrabInteractable` and `XRSimpleInteractable`) and routes these to the `ProcessUseInteraction` method of the `IVRInteractionService`.
-    - This allows a clear distinction between grabbing an object and using an object (which might be separate actions even for the same grabbable object).
-- `VRSceneSetup`: (If exists) Sets up the Unity scene for VR, potentially placing initial interactable objects.
+- `VRInteractionController`: Connects Unity's XR Interaction Toolkit events with the application's domain logic by handling various `XRBaseInteractable` events:
+    - `selectEntered` -> `HandleSelectEntered` -> `IVRInteractionService.ProcessGrabInteraction()`
+    - `selectExited` -> `HandleSelectExited` -> `IVRInteractionService.ProcessReleaseInteraction()`
+    - `activated` -> `HandleActivated` -> `IVRInteractionService.ProcessUseInteraction()`
+    - `hoverEntered` -> `HandleHoverEntered` -> `IVRInteractionService.ProcessHoverEnter()`
+    - `hoverExited` -> `HandleHoverExited` -> `IVRInteractionService.ProcessHoverExit()`
+    - This ensures a clear mapping from specific XR hardware events to appropriate domain responses.
+- `VRSceneSetup`: (If exists) Sets up the Unity scene for VR.
 
 **Key Characteristics:**
 - Contains Unity MonoBehaviour components.
-- Handles user input events from the XR system.
-- Uses application layer services (`IVRInteractionService`) to perform domain-specific operations based on the type of XR event detected.
-- Maps between Unity concepts (GameObjects, XR events) and domain concepts (entity IDs, interaction types).
+- Listens to and translates specific XR events into calls to the application service.
+- Uses application layer services to trigger domain logic.
+- Decouples XR hardware specifics from the application and domain layers.
 
 ## Benefits of DDD in VR Development
 
@@ -95,44 +110,69 @@ Handles the user interface and interactions with the system.
 
 ## Example Flow
 
-The following steps describe how specific XR interactions (Grab and Use) are processed:
+The following examples illustrate the refined interaction flows:
 
-**A. Grab Interaction Example:**
+**A. Grab and Release Cycle:**
 
-1.  **User Action**: The user aims their controller at a grabbable GameObject and presses the grab button.
-2.  **XR Event (Select Entered)**: Unity's XR Interaction Toolkit detects this and triggers a `selectEntered` event on the `XRGrabInteractable` component of the GameObject.
-3.  **`VRInteractionController` Handles `selectEntered`**:
-    *   The `HandleSelectEntered` method in `VRInteractionController` is invoked.
-    *   It retrieves the `GameObject` from the event arguments.
-4.  **Entity Identification**:
-    *   `VRInteractionController` calls `UnityVRInteractionRepository.GetEntityIdByGameObject()` to get the domain entity's ID using the `EntityIdentifier` component on the GameObject.
-5.  **Specific Service Call (`ProcessGrabInteraction`)**:
-    *   `VRInteractionController` calls `IVRInteractionService.ProcessGrabInteraction(entityId, interactorName)`.
-6.  **Application Service Logic (`ProcessGrabInteraction`)**:
-    *   `VRInteractionService` retrieves the `VRInteractionEntity` from the repository.
-    *   It checks if the entity `IsGrabbable`.
-    *   If so, it calls `entity.Grab(interactorName)`.
-7.  **Domain Entity Logic (`Grab`)**:
-    *   The `VRInteractionEntity.Grab()` method executes its specific logic (e.g., updates `WasInteracted`, `InteractionCount`, logs "GRABBED" message).
-8.  **Persistence**: `VRInteractionService` calls `_repository.Update(entity)` to save changes if any.
+1.  **User Action (Grab)**: User points at a grabbable GameObject and presses the grab button.
+2.  **XR Event (`selectEntered`)**: Detected by XR Interaction Toolkit on the `XRGrabInteractable`.
+3.  **`VRInteractionController` (`HandleSelectEntered`)**:
+    *   Identifies entity ID via `UnityVRInteractionRepository.GetEntityIdByGameObject()`.
+    *   Calls `IVRInteractionService.ProcessGrabInteraction(entityId, interactorName)`.
+4.  **`VRInteractionService` (`ProcessGrabInteraction`)**:
+    *   Retrieves `VRInteractionEntity`.
+    *   Calls `entity.Grab(interactorName)`.
+5.  **`VRInteractionEntity` (`Grab`)**:
+    *   Sets `IsGrabbed = true`.
+    *   Updates `WasInteracted`, `InteractionCount`.
+    *   Logs "GRABBED" message.
+6.  **`VRInteractionService`**: Calls `_repository.Update(entity)`.
+7.  **User Action (Release)**: User releases the grab button.
+8.  **XR Event (`selectExited`)**: Detected on the `XRGrabInteractable`.
+9.  **`VRInteractionController` (`HandleSelectExited`)**:
+    *   Identifies entity ID.
+    *   Calls `IVRInteractionService.ProcessReleaseInteraction(entityId, interactorName)`.
+10. **`VRInteractionService` (`ProcessReleaseInteraction`)**:
+    *   Retrieves `VRInteractionEntity`.
+    *   Calls `entity.Release(interactorName)`.
+11. **`VRInteractionEntity` (`Release`)**:
+    *   Sets `IsGrabbed = false`.
+    *   Logs "RELEASED" message.
+12. **`VRInteractionService`**: Calls `_repository.Update(entity)`.
 
-**B. Use Interaction Example (e.g., pressing a button on an object):**
+**B. Hover Enter and Exit Cycle (with Visual Feedback):**
 
-1.  **User Action**: While an object is selected/hovered, or if it's a static usable object, the user presses an "activate" or "use" button on their controller.
-2.  **XR Event (Activated)**: Unity's XR Interaction Toolkit triggers an `activated` event on the `XRBaseInteractable` component (could be `XRGrabInteractable` or `XRSimpleInteractable`).
-3.  **`VRInteractionController` Handles `activated`**:
-    *   The `HandleActivated` method in `VRInteractionController` is invoked.
-    *   It retrieves the `GameObject`.
-4.  **Entity Identification**:
-    *   Same as in the grab flow, `VRInteractionController` gets the `entityId`.
-5.  **Specific Service Call (`ProcessUseInteraction`)**:
-    *   `VRInteractionController` calls `IVRInteractionService.ProcessUseInteraction(entityId, interactorName)`.
-6.  **Application Service Logic (`ProcessUseInteraction`)**:
-    *   `VRInteractionService` retrieves the `VRInteractionEntity`.
-    *   It checks if the entity `IsUsable`.
-    *   If so, it calls `entity.Use(interactorName)`.
-7.  **Domain Entity Logic (`Use`)**:
-    *   The `VRInteractionEntity.Use()` method executes its specific logic (e.g., updates state, logs "USED" message).
-8.  **Persistence**: `VRInteractionService` calls `_repository.Update(entity)`.
+1.  **User Action (Hover Enter)**: User's controller pointer moves over an interactable GameObject.
+2.  **XR Event (`hoverEntered`)**: Detected on the `XRBaseInteractable`.
+3.  **`VRInteractionController` (`HandleHoverEntered`)**:
+    *   Identifies entity ID.
+    *   Calls `IVRInteractionService.ProcessHoverEnter(entityId, interactorName)`.
+4.  **`VRInteractionService` (`ProcessHoverEnter`)**:
+    *   Retrieves `VRInteractionEntity`.
+    *   Calls `entity.HoverEnter(interactorName)`.
+5.  **`VRInteractionEntity` (`HoverEnter`)**:
+    *   Sets `IsHovered = true`.
+    *   Logs "HOVER ENTER" message.
+6.  **`VRInteractionService`**: Calls `_repository.Update(entity)`.
+7.  **`UnityVRInteractionRepository` (`Update`)**:
+    *   Detects `entity.IsHovered == true`.
+    *   Changes the GameObject's material color to `hoverColor`.
+8.  **User Action (Hover Exit)**: User's controller pointer moves off the GameObject.
+9.  **XR Event (`hoverExited`)**: Detected on the `XRBaseInteractable`.
+10. **`VRInteractionController` (`HandleHoverExited`)**:
+    *   Identifies entity ID.
+    *   Calls `IVRInteractionService.ProcessHoverExit(entityId, interactorName)`.
+11. **`VRInteractionService` (`ProcessHoverExit`)**:
+    *   Retrieves `VRInteractionEntity`.
+    *   Calls `entity.HoverExit(interactorName)`.
+12. **`VRInteractionEntity` (`HoverExit`)**:
+    *   Sets `IsHovered = false`.
+    *   Logs "HOVER EXIT" message.
+13. **`VRInteractionService`**: Calls `_repository.Update(entity)`.
+14. **`UnityVRInteractionRepository` (`Update`)**:
+    *   Detects `entity.IsHovered == false`.
+    *   Changes the GameObject's material color back to `originalColor`.
 
-This refactored flow provides a clearer mapping from specific XR controller events to specific domain actions, enhancing the expressiveness and maintainability of the interaction logic.
+**C. Use Interaction Example:** Remains largely the same as previously described, but now uses `ProcessUseInteraction` and `entity.Use()`.
+
+This detailed flow illustrates how specific user actions are mapped through the layers to specific domain logic and state changes, including visual feedback for hover states.

@@ -33,20 +33,40 @@ The project follows a layered architecture based on DDD principles:
 
 The project handles user interactions with VR objects through a defined flow:
 
-1.  **XR Event Trigger**: Unity's XR Interaction Toolkit detects user actions (e.g., grab, use) on GameObjects.
-2.  **Event Handling**: `VRInteractionController` (Presentation Layer) listens to these XR events.
+1.  **XR Event Trigger**: Unity's XR Interaction Toolkit detects user actions on GameObjects. This includes:
+    *   `selectEntered`: Typically when a user grabs an object.
+    *   `selectExited`: When a user releases a grabbed object.
+    *   `activated`: When a user activates an object (e.g., presses a button on it, or uses a tool).
+    *   `hoverEntered`: When a user's controller pointer hovers over an object.
+    *   `hoverExited`: When the controller pointer stops hovering over an object.
+2.  **Event Handling**: `VRInteractionController` (Presentation Layer) listens to these XR events from `XRBaseInteractable` components.
 3.  **Entity Mapping**:
-    *   The `VRInteractionController` uses the `UnityVRInteractionRepository` (Infrastructure Layer) to find the domain entity associated with the interacted GameObject.
-    *   This mapping is facilitated by the `EntityIdentifier` component (Infrastructure Layer) attached to GameObjects, which holds the domain entity's ID.
-4.  **Service Call**:
-    *   `VRInteractionController` distinguishes between different XR events. For example, a `selectEntered` event (typically a grab) will cause it to call `IVRInteractionService.ProcessGrabInteraction(entityId, interactorName)`.
-    *   An `activated` event (typically a use action, like a button press) will cause it to call `IVRInteractionService.ProcessUseInteraction(entityId, interactorName)`.
+    *   The `VRInteractionController` uses `UnityVRInteractionRepository` (Infrastructure Layer) to find the domain entity ID associated with the interacted GameObject via its `EntityIdentifier` component.
+4.  **Service Call**: Based on the XR event, `VRInteractionController` calls the appropriate method on `IVRInteractionService`:
+    *   `selectEntered` -> `ProcessGrabInteraction(entityId, interactorName)`
+    *   `selectExited` -> `ProcessReleaseInteraction(entityId, interactorName)`
+    *   `activated` -> `ProcessUseInteraction(entityId, interactorName)`
+    *   `hoverEntered` -> `ProcessHoverEnter(entityId, interactorName)`
+    *   `hoverExited` -> `ProcessHoverExit(entityId, interactorName)`
 5.  **Domain Logic Execution**:
     *   The `IVRInteractionService` (Application Layer) retrieves the `VRInteractionEntity`.
-    *   Based on the specific service method called (e.g., `ProcessGrabInteraction`), it then invokes the corresponding method on the entity (e.g., `VRInteractionEntity.Grab(interactorName)`).
-6.  **Entity Reaction**: The specific methods (`Grab()` or `Use()`) within `VRInteractionEntity` (Domain Layer) contain the business logic for how the entity responds to that particular type of interaction (e.g., changing state, logging specific messages).
+    *   It then invokes the corresponding method on the entity (e.g., `Grab()`, `Release()`, `Use()`, `HoverEnter()`, `HoverExit()`).
+6.  **Entity Reaction & State Update**:
+    *   The methods within `VRInteractionEntity` (Domain Layer) execute specific business logic.
+    *   This includes updating entity state, such as `IsGrabbed` (true on grab, false on release) and `IsHovered` (true on hover enter, false on hover exit), and incrementing `InteractionCount`.
+    *   Appropriate log messages are generated.
+7.  **Visual Feedback (Hover)**:
+    *   When `IVRInteractionService` calls `_repository.Update(entity)` after a hover state change, the `UnityVRInteractionRepository` detects the change in `entity.IsHovered`.
+    *   It then updates the material color of the corresponding GameObject (e.g., to yellow for hover, back to white for non-hover) providing visual feedback.
 
-This flow ensures that Unity-specific XR events are translated into distinct, domain-specific actions (`Grab`, `Use`), enhancing clarity and separation of concerns.
+This flow ensures that specific XR events are mapped to distinct domain actions and state changes, including visual cues for hover interactions.
+
+### Key Interaction Features
+- **Grab**: Objects can be picked up. Their state changes to `IsGrabbed = true`.
+- **Release**: Grabbed objects can be let go. Their state changes to `IsGrabbed = false`.
+- **Use**: Objects can be "used" (e.g., pressing a button on them).
+- **Hover**: Pointing at objects provides visual feedback (color change) and updates their `IsHovered` state.
+- **Interaction Tracking**: All interactions update `WasInteracted` and `InteractionCount` on the entity.
 
 ## Development Setup
 

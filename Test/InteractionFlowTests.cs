@@ -92,44 +92,46 @@ public class InteractionFlowTests
     }
 
     [UnityTest]
-    public IEnumerator TestGrabInteraction_CallsEntityInteractMethod()
+    public IEnumerator TestGrabAndReleaseInteraction_UpdatesStateAndLogs() // Renamed
     {
-        // Test setup ensures _interactionService and _interactionRepository are initialized.
-        // No need to yield again here unless specifically waiting for VRInteractionController.Start() if it does more.
-        // Setup already yields a frame.
-
         // Arrange
         string entityName = "TestGrabbableEntity";
         var entity = _interactionService.RegisterInteractable(entityName, InteractionType.Grab, true, false);
         Assert.IsNotNull(entity, "Entity should be registered.");
-        // Set position after registration, repository's Add method uses CurrentPosition
         _interactionService.UpdateInteractablePosition(entity.Id, new VRInteractionEntity.Position(0,1,2));
-        yield return null; // Allow repository to process Add and create/update GameObject
+        yield return null;
 
         GameObject entityGo = _interactionRepository._gameObjectMap[entity.Id];
         Assert.IsNotNull(entityGo, $"GameObject for entity {entity.Id} should exist in repository.");
-
         var grabInteractable = entityGo.GetComponent<XRGrabInteractable>();
         Assert.IsNotNull(grabInteractable, "XRGrabInteractable component should be on the GameObject.");
 
-        // Act
-        // Updated log message to match VRInteractionEntity.Grab()
-        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' GRABBED by interactor '{_dummyInteractor.name}'. Total interactions: 1.");
-
-        Assert.IsTrue(_dummyInteractor.gameObject.activeInHierarchy && _dummyInteractor.enabled, "Interactor should be active and enabled.");
-        Assert.IsTrue(grabInteractable.gameObject.activeInHierarchy && grabInteractable.enabled, "Interactable should be active and enabled.");
-
+        // Act (Grab)
+        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' GRABBED by interactor '{_dummyInteractor.name}'. Total interactions: 1. IsGrabbed: True");
+        Assert.IsTrue(_dummyInteractor.gameObject.activeInHierarchy && _dummyInteractor.enabled, "Interactor should be active and enabled for grab.");
+        Assert.IsTrue(grabInteractable.gameObject.activeInHierarchy && grabInteractable.enabled, "Interactable should be active and enabled for grab.");
         _interactionManager.SelectEnter(_dummyInteractor, grabInteractable);
+        yield return null;
 
-        yield return null; // Wait a frame for event processing by VRInteractionController
+        // Assert (Grab)
+        var grabbedEntity = _interactionService.GetInteractableById(entity.Id);
+        Assert.IsNotNull(grabbedEntity, "Grabbed entity should be retrievable.");
+        Assert.IsTrue(grabbedEntity.WasInteracted, "Entity's WasInteracted should be true after grab.");
+        Assert.AreEqual(1, grabbedEntity.InteractionCount, "Entity's InteractionCount should be 1 after grab.");
+        Assert.IsTrue(grabbedEntity.IsGrabbed, "Entity's IsGrabbed should be true after grab.");
 
-        // Assert
-        var updatedEntity = _interactionService.GetInteractableById(entity.Id);
-        Assert.IsNotNull(updatedEntity, "Updated entity should be retrievable.");
-        Assert.IsTrue(updatedEntity.WasInteracted, "Entity's WasInteracted should be true after grab.");
-        Assert.AreEqual(1, updatedEntity.InteractionCount, "Entity's InteractionCount should be 1 after grab.");
+        // Act (Release)
+        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' RELEASED by interactor '{_dummyInteractor.name}'. IsGrabbed: False");
+        _interactionManager.SelectExit(_dummyInteractor, grabInteractable);
+        yield return null;
 
-        // LogAssert.NoUnexpectedReceived() in TearDown will verify the expected log.
+        // Assert (Release)
+        var releasedEntity = _interactionService.GetInteractableById(entity.Id);
+        Assert.IsNotNull(releasedEntity, "Released entity should be retrievable.");
+        Assert.IsFalse(releasedEntity.IsGrabbed, "Entity's IsGrabbed should be false after release.");
+        // InteractionCount might or might not change on release depending on domain logic, current Release doesn't change it.
+        Assert.AreEqual(1, releasedEntity.InteractionCount, "InteractionCount should remain 1 after release if Release doesn't modify it.");
+
         yield return null;
     }
 
@@ -184,6 +186,64 @@ public class InteractionFlowTests
 
         // Clean up selection for this test item
         _interactionManager.SelectExit(_dummyInteractor, simpleInteractable);
+        yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator TestHoverInteraction_UpdatesStateAndLogs()
+    {
+        // Arrange
+        string entityName = "TestHoverableEntity";
+        // For hover, it can be any type of interactable (grabbable, usable, or just hoverable)
+        var entity = _interactionService.RegisterInteractable(entityName, InteractionType.Point, false, false); // Example: Not grabbable/usable
+        Assert.IsNotNull(entity, "Entity should be registered for hover test.");
+        _interactionService.UpdateInteractablePosition(entity.Id, new VRInteractionEntity.Position(0,1,3));
+        yield return null;
+
+        GameObject entityGo = _interactionRepository._gameObjectMap[entity.Id];
+        Assert.IsNotNull(entityGo, $"GameObject for entity {entity.Id} should exist in repository for hover test.");
+        // Any XRBaseInteractable can be hovered. If specific components were added for non-grabbable/non-usable,
+        // get that. For now, UnityVRInteractionRepository adds BoxCollider. XRBaseInteractable events are on it.
+        var interactable = entityGo.GetComponent<XRBaseInteractable>();
+        if (interactable == null) // If only BoxCollider was added and no specific XR...Interactable
+        {
+            // In our current UnityVRInteractionRepository, if not grabbable or usable, no XR component is added.
+            // XRInteractionManager.HoverEnter/Exit requires an IXRHoverInteractable.
+            // So, for this test to work with current repo, entity must be grabbable or usable.
+            // Let's make it usable so XRSimpleInteractable is added.
+            entity = _interactionService.RegisterInteractable(entityName, InteractionType.Point, false, true); // Make it usable
+            _interactionService.UpdateInteractablePosition(entity.Id, new VRInteractionEntity.Position(0,1,3));
+             yield return null; // Re-yield after re-registration
+            entityGo = _interactionRepository._gameObjectMap[entity.Id]; // Re-fetch
+            interactable = entityGo.GetComponent<XRBaseInteractable>(); // Should now have XRSimpleInteractable
+        }
+        Assert.IsNotNull(interactable, "An XRBaseInteractable component (e.g., XRSimpleInteractable or XRGrabInteractable) must be on the GameObject for hover events.");
+
+        // Act (Hover Enter)
+        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' HOVER ENTER by interactor '{_dummyInteractor.name}'. IsHovered: True");
+        Assert.IsTrue(_dummyInteractor.gameObject.activeInHierarchy && _dummyInteractor.enabled, "Interactor should be active for hover enter.");
+        Assert.IsTrue(interactable.gameObject.activeInHierarchy && interactable.enabled, "Interactable should be active for hover enter.");
+        _interactionManager.HoverEnter(_dummyInteractor, interactable);
+        yield return null;
+
+        // Assert (Hover Enter)
+        var hoveredEntity = _interactionService.GetInteractableById(entity.Id);
+        Assert.IsNotNull(hoveredEntity, "Hovered entity should be retrievable.");
+        Assert.IsTrue(hoveredEntity.IsHovered, "Entity's IsHovered should be true after hover enter.");
+        // Note: InteractionCount is not expected to change on hover by current domain logic.
+        // Assert.AreEqual(0, hoveredEntity.InteractionCount, "InteractionCount should be 0 for hover if it's a new entity.");
+
+
+        // Act (Hover Exit)
+        LogAssert.Expect(LogType.Log, $"Entity '{entity.Name}' HOVER EXIT by interactor '{_dummyInteractor.name}'. IsHovered: False");
+        _interactionManager.HoverExit(_dummyInteractor, interactable);
+        yield return null;
+
+        // Assert (Hover Exit)
+        var unhoveredEntity = _interactionService.GetInteractableById(entity.Id);
+        Assert.IsNotNull(unhoveredEntity, "Unhovered entity should be retrievable.");
+        Assert.IsFalse(unhoveredEntity.IsHovered, "Entity's IsHovered should be false after hover exit.");
+
         yield return null;
     }
 }

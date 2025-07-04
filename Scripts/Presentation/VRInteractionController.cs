@@ -113,7 +113,10 @@ namespace MetaQuestTest.Presentation
                 if (interactable != null)
                 {
                     interactable.selectEntered.AddListener(HandleSelectEntered);
+                    interactable.selectExited.AddListener(HandleSelectExited);
                     interactable.activated.AddListener(HandleActivated);
+                    interactable.hoverEntered.AddListener(HandleHoverEntered); // Subscribe to hoverEntered
+                    interactable.hoverExited.AddListener(HandleHoverExited);   // Subscribe to hoverExited
                 }
             }
             Debug.Log("VR Interaction Controller initialized and XR events setup.");
@@ -150,6 +153,57 @@ namespace MetaQuestTest.Presentation
                 }
             }
         }
+
+        private void HandleSelectExited(SelectExitEventArgs args)
+        {
+            var interactableObject = args.interactableObject as IXRSelectInteractable;
+            if (interactableObject != null && interactableObject.transform != null)
+            {
+                string entityId = _repository.GetEntityIdByGameObject(interactableObject.transform.gameObject);
+                var interactorTransform = args.interactorObject?.transform;
+                string interactorName = interactorTransform != null ? interactorTransform.name : "UnknownInteractor";
+
+                if (!string.IsNullOrEmpty(entityId))
+                {
+                    _interactionService.ProcessReleaseInteraction(entityId, interactorName);
+                    Debug.Log($"Select Exited (Release): Entity '{entityId}', Interactor: '{interactorName}'");
+                }
+            }
+        }
+
+        private void HandleHoverEntered(HoverEnterEventArgs args)
+        {
+            var interactableObject = args.interactableObject as IXRHoverInteractable; // IXRHoverInteractable is the correct interface
+            if (interactableObject != null && interactableObject.transform != null)
+            {
+                string entityId = _repository.GetEntityIdByGameObject(interactableObject.transform.gameObject);
+                var interactorTransform = args.interactorObject?.transform;
+                string interactorName = interactorTransform != null ? interactorTransform.name : "UnknownInteractor";
+
+                if (!string.IsNullOrEmpty(entityId))
+                {
+                    _interactionService.ProcessHoverEnter(entityId, interactorName);
+                    Debug.Log($"Hover Entered: Entity '{entityId}', Interactor: '{interactorName}'");
+                }
+            }
+        }
+
+        private void HandleHoverExited(HoverExitEventArgs args)
+        {
+            var interactableObject = args.interactableObject as IXRHoverInteractable; // IXRHoverInteractable is the correct interface
+            if (interactableObject != null && interactableObject.transform != null)
+            {
+                string entityId = _repository.GetEntityIdByGameObject(interactableObject.transform.gameObject);
+                var interactorTransform = args.interactorObject?.transform;
+                string interactorName = interactorTransform != null ? interactorTransform.name : "UnknownInteractor";
+
+                if (!string.IsNullOrEmpty(entityId))
+                {
+                    _interactionService.ProcessHoverExit(entityId, interactorName);
+                    Debug.Log($"Hover Exited: Entity '{entityId}', Interactor: '{interactorName}'");
+                }
+            }
+        }
         
         void Update()
         {
@@ -168,7 +222,10 @@ namespace MetaQuestTest.Presentation
                     if (interactable != null)
                     {
                         interactable.selectEntered.RemoveListener(HandleSelectEntered);
+                        interactable.selectExited.RemoveListener(HandleSelectExited);
                         interactable.activated.RemoveListener(HandleActivated);
+                        interactable.hoverEntered.RemoveListener(HandleHoverEntered); // Unsubscribe from hoverEntered
+                        interactable.hoverExited.RemoveListener(HandleHoverExited);   // Unsubscribe from hoverExited
                     }
                 }
             }

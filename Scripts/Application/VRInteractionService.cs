@@ -105,5 +105,51 @@ namespace MetaQuestTest.Application
                 Debug.LogWarning($"Entity with ID {interactableId} not found. Cannot process use interaction.");
             }
         }
+
+        public void ProcessReleaseInteraction(string interactableId, string interactorId)
+        {
+            var entity = _repository.GetById(interactableId);
+            if (entity != null)
+            {
+                // Call Release on the entity. The entity itself handles the IsGrabbed state.
+                // We could add a check here: if (entity.IsGrabbed), but it's arguably the entity's job
+                // to correctly handle a Release call regardless of its current IsGrabbed state.
+                // For now, we align with how Grab/Use are handled (entity method called if entity exists).
+                entity.Release(interactorId);
+                _repository.Update(entity); // Persist changes to IsGrabbed state
+            }
+            else
+            {
+                Debug.LogWarning($"Entity with ID {interactableId} not found. Cannot process release interaction.");
+            }
+        }
+
+        public void ProcessHoverEnter(string interactableId, string interactorId)
+        {
+            var entity = _repository.GetById(interactableId);
+            if (entity != null)
+            {
+                entity.HoverEnter(interactorId);
+                _repository.Update(entity); // Persist IsHovered state and trigger visual update
+            }
+            else
+            {
+                Debug.LogWarning($"Entity with ID {interactableId} not found. Cannot process hover enter.");
+            }
+        }
+
+        public void ProcessHoverExit(string interactableId, string interactorId)
+        {
+            var entity = _repository.GetById(interactableId);
+            if (entity != null)
+            {
+                entity.HoverExit(interactorId);
+                _repository.Update(entity); // Persist IsHovered state and trigger visual update
+            }
+            else
+            {
+                Debug.LogWarning($"Entity with ID {interactableId} not found. Cannot process hover exit.");
+            }
+        }
     }
 }
